@@ -2,13 +2,15 @@ package com.fahim.geminiapistarter;
 
 import android.Manifest;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
-import android.speech.SpeechRecognizer;
 import android.speech.RecognitionListener;
+import android.speech.SpeechRecognizer;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
@@ -26,6 +28,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.ai.client.generativeai.GenerativeModel;
 import com.google.ai.client.generativeai.type.GenerateContentResponse;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,10 +38,6 @@ import java.util.Locale;
 import kotlin.coroutines.Continuation;
 import kotlin.coroutines.CoroutineContext;
 import kotlin.coroutines.EmptyCoroutineContext;
-
-//import android.content.SharedPreferences;
-//import com.google.gson.Gson;
-//import com.google.gson.reflect.TypeToken;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -58,71 +58,105 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
-        // Adjust layout to avoid overlap with system bars
+
+
         View rootView = findViewById(R.id.main);
         ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, insets) -> {
             int statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
             int navBarHeight = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom;
-
             v.setPadding(0, statusBarHeight, 0, navBarHeight);
             return insets;
         });
+
         promptEditText = findViewById(R.id.promptEditText);
         ImageButton sendButton = findViewById(R.id.sendButton);
         ImageButton voiceInputButton = findViewById(R.id.voiceButton);
         progressBar = findViewById(R.id.progressBar);
         recyclerView = findViewById(R.id.recyclerView);
 
-        // Setup RecyclerView
+
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         messageAdapter = new MessageAdapter(messageList);
         recyclerView.setAdapter(messageAdapter);
 
-        // Load previous chat messages
-//        loadChatHistory();
+        Button clearChatButton = findViewById(R.id.clearChatButton);
+        clearChatButton.setOnClickListener(v -> clearChatHistory());
 
-        // Request microphone permission
+
+
+        loadChatHistory();
+
+
         requestMicrophonePermission();
 
-        // Initialize SpeechRecognizer
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
 
-        // Initialize Generative AI Model (Gemini)
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+                Toast.makeText(MainActivity.this, "Listening...", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onBeginningOfSpeech() {}
+
+            @Override
+            public void onRmsChanged(float rmsdB) {}
+
+            @Override
+            public void onBufferReceived(byte[] buffer) {}
+
+            @Override
+            public void onEndOfSpeech() {}
+
+            @Override
+            public void onError(int error) {
+                Log.e("SpeechRecognizer", "Error Code: " + error);
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Speech recognition error: " + error, Toast.LENGTH_SHORT).show());
+            }
+
+            @Override
+            public void onResults(Bundle results) {
+                ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (matches != null && !matches.isEmpty()) {
+                    String recognizedText = matches.get(0);
+                    runOnUiThread(() -> promptEditText.setText(recognizedText));
+                }
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {}
+
+            @Override
+            public void onEvent(int eventType, Bundle params) {}
+        });
+
+
         generativeModel = new GenerativeModel("gemini-2.0-flash", BuildConfig.API_KEY);
 
         voiceInputButton.setOnClickListener(v -> startVoiceRecognition());
-
         sendButton.setOnClickListener(v -> sendMessage());
-
-
-
-//        promptEditText.setOnFocusChangeListener((v, hasFocus) -> {
-//            if (hasFocus) {
-//                scrollToBottom();
-//            }
-//        });
-
     }
 
     private void sendMessage() {
-
         String prompt = promptEditText.getText().toString().trim();
         if (prompt.isEmpty()) {
             promptEditText.setError("Field cannot be empty");
             return;
         }
 
-        // Add user message to RecyclerView
+
         messageList.add(new Message(prompt, true));
         messageAdapter.notifyItemInserted(messageList.size() - 1);
         recyclerView.scrollToPosition(messageList.size() - 1);
-        promptEditText.setText(""); // Clear input field
+        promptEditText.setText("");
 
-        // Show progress bar
+
+        saveChatHistory();
+
         progressBar.setVisibility(View.VISIBLE);
 
 
-        // Send request to Gemini AI
         generativeModel.generateContent(prompt, new Continuation<>() {
             @NonNull
             @Override
@@ -136,53 +170,68 @@ public class MainActivity extends AppCompatActivity {
                     GenerateContentResponse response = (GenerateContentResponse) o;
                     String responseString = response.getText();
 
-                    // Check for null response
                     if (responseString == null || responseString.isEmpty()) {
                         responseString = "No response received.";
                     }
 
                     Log.d("Gemini Response", responseString);
 
-                    // Update UI on main thread
+
                     String finalResponseString = responseString;
                     runOnUiThread(() -> {
                         progressBar.setVisibility(View.GONE);
                         messageList.add(new Message(finalResponseString, false));
                         messageAdapter.notifyItemInserted(messageList.size() - 1);
                         recyclerView.scrollToPosition(messageList.size() - 1);
-                        // Save updated chat history
-//                        saveChatHistory();
+
+
+                        saveChatHistory();
                     });
                 } else {
                     Log.e("Gemini Error", "Unexpected response type");
                 }
             }
-
         });
-
-
     }
-    // Save messages to SharedPreferences
-//    private void saveChatHistory() {
-//        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-//        SharedPreferences.Editor editor = prefs.edit();
-//        Gson gson = new Gson();
-//        String json = gson.toJson(messageList);
-//        editor.putString(CHAT_HISTORY_KEY, json);
-//        editor.apply();
-//    }
-//
-//    // Load messages from SharedPreferences
-//    private void loadChatHistory() {
-//        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-//        Gson gson = new Gson();
-//        String json = prefs.getString(CHAT_HISTORY_KEY, null);
-//        if (json != null) {
-//            messageList = gson.fromJson(json, new TypeToken<List<Message>>() {}.getType());
-//            messageAdapter.notifyDataSetChanged();
-//        }
-//    }
-    // Request microphone permission
+
+
+    private void saveChatHistory() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        Gson gson = new Gson();
+        String json = gson.toJson(messageList);
+        editor.putString(CHAT_HISTORY_KEY, json);
+        editor.apply();
+    }
+
+
+    private void loadChatHistory() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        Gson gson = new Gson();
+        String json = prefs.getString(CHAT_HISTORY_KEY, null);
+        if (json != null) {
+            List<Message> savedMessages = gson.fromJson(json, new TypeToken<List<Message>>() {}.getType());
+            if (savedMessages != null) {
+                messageList.clear();
+                messageList.addAll(savedMessages);
+                messageAdapter.notifyDataSetChanged();
+                recyclerView.scrollToPosition(messageList.size() - 1);
+            }
+        }
+    }
+
+    private void clearChatHistory() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.remove(CHAT_HISTORY_KEY);
+        editor.apply();
+
+        messageList.clear();
+        messageAdapter.notifyDataSetChanged();
+
+        Toast.makeText(this, "Chat history cleared", Toast.LENGTH_SHORT).show();
+    }
+
     private void requestMicrophonePermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -191,7 +240,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Handle permission result
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -202,7 +250,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Start voice recognition
     private void startVoiceRecognition() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -215,59 +262,8 @@ public class MainActivity extends AppCompatActivity {
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
         intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak now...");
 
-        speechRecognizer.setRecognitionListener(new RecognitionListener() {
-            @Override
-            public void onReadyForSpeech(Bundle params) {
-                Log.d("SpeechRecognizer", "Ready for speech");
-            }
-
-            @Override
-            public void onBeginningOfSpeech() {
-                Log.d("SpeechRecognizer", "Speech started");
-            }
-
-            @Override
-            public void onRmsChanged(float rmsdB) {
-
-            }
-
-            @Override
-            public void onBufferReceived(byte[] buffer) {
-
-            }
-
-            @Override
-            public void onEndOfSpeech() {
-                Log.d("SpeechRecognizer", "Speech ended");
-            }
-
-            @Override
-            public void onError(int error) {
-                Toast.makeText(MainActivity.this, "Speech recognition failed. Try again!", Toast.LENGTH_SHORT).show();
-                Log.e("SpeechRecognizer", "Error: " + error);
-            }
-
-            @Override
-            public void onResults(Bundle results) {
-                ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                if (matches != null && !matches.isEmpty()) {
-                    promptEditText.setText(matches.get(0)); // Set recognized text in EditText
-                    sendMessage(); // Auto-send message
-                }
-            }
-
-            @Override
-            public void onPartialResults(Bundle partialResults) {}
-
-            @Override
-            public void onEvent(int eventType, Bundle params) {}
-        });
-
         speechRecognizer.startListening(intent);
     }
-//    private void scrollToBottom() {
-//        recyclerView.post(() -> recyclerView.smoothScrollToPosition(messageList.size() - 1));
-//    }
 
     @Override
     protected void onDestroy() {

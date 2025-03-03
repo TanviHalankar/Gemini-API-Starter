@@ -8,7 +8,7 @@
     android:padding="16dp"
     tools:context=".MainActivity">
 
-    <!-- App Title -->
+
     <TextView
         android:id="@+id/textView"
         android:layout_width="wrap_content"
@@ -20,18 +20,29 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Chat RecyclerView -->
+
+    <Button
+        android:id="@+id/clearChatButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Clear Chat"
+        android:layout_marginTop="10dp"
+        app:layout_constraintTop_toBottomOf="@id/textView"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintTop_toBottomOf="@id/textView"
+        app:layout_constraintTop_toBottomOf="@id/clearChatButton"
         app:layout_constraintBottom_toTopOf="@id/promptEditTextLayout"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         tools:listitem="@layout/item_message" />
 
-    <!-- Chat Input Field -->
+
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/promptEditTextLayout"
         android:layout_width="match_parent"
@@ -52,7 +63,7 @@
             android:layout_height="match_parent" />
     </com.google.android.material.textfield.TextInputLayout>
 
-    <!-- Voice Button -->
+
     <ImageButton
         android:id="@+id/voiceButton"
         android:layout_width="48dp"
@@ -62,7 +73,7 @@
         app:layout_constraintBottom_toBottomOf="@id/promptEditTextLayout"
         app:layout_constraintEnd_toStartOf="@id/sendButton" />
 
-    <!-- Send Button -->
+
     <ImageButton
         android:id="@+id/sendButton"
         android:layout_width="48dp"
