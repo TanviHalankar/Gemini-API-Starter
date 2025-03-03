@@ -45,7 +45,9 @@ dependencies {
     implementation(libs.constraintlayout)
     implementation(libs.common)
     implementation(libs.generativeai)
+    implementation(libs.firebase.crashlytics.buildtools)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+//    implementation(libs.gson)
 }
